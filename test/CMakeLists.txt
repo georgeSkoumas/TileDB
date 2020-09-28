@@ -56,6 +56,7 @@ set(TILEDB_TEST_SOURCES
   src/unit-capi-dense_array.cc
   src/unit-capi-dense_array_2.cc
   src/unit-capi-dense_neg.cc
+  src/unit-capi-dense_nullable.cc
   src/unit-capi-dense_vector.cc
   src/unit-duplicates.cc
   src/unit-capi-empty-var-length.cc

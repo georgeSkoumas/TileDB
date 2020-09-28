@@ -503,6 +503,18 @@ inline int32_t sanity_check(tiledb_ctx_t* ctx, const tiledb_query_t* query) {
   return TILEDB_OK;
 }
 
+inline int32_t sanity_check(
+    tiledb_ctx_t* ctx, const tiledb_validity_vec_t* validity_vec) {
+  if (validity_vec == nullptr || validity_vec->validity_vec_ == nullptr) {
+    auto st =
+        tiledb::sm::Status::Error("Invalid TileDB validity vector object");
+    LOG_STATUS(st);
+    save_error(ctx, st);
+    return TILEDB_ERR;
+  }
+  return TILEDB_OK;
+}
+
 inline int32_t sanity_check(tiledb_ctx_t* ctx, const tiledb_vfs_t* vfs) {
   if (vfs == nullptr || vfs->vfs_ == nullptr) {
     auto st =
@@ -1470,6 +1482,18 @@ void tiledb_attribute_free(tiledb_attribute_t** attr) {
     delete (*attr);
     *attr = nullptr;
   }
+}
+
+int32_t tiledb_attribute_set_nullable(
+    tiledb_ctx_t* ctx, tiledb_attribute_t* attr, uint8_t nullable) {
+  if (sanity_check(ctx) == TILEDB_ERR || sanity_check(ctx, attr) == TILEDB_ERR)
+    return TILEDB_ERR;
+
+  if (SAVE_ERROR_CATCH(
+          ctx, attr->attr_->set_nullable(static_cast<bool>(nullable))))
+    return TILEDB_ERR;
+
+  return TILEDB_OK;
 }
 
 int32_t tiledb_attribute_set_filter_list(
@@ -2635,6 +2659,67 @@ int32_t tiledb_query_set_buffer_var(
   return TILEDB_OK;
 }
 
+int32_t tiledb_query_set_buffer_nullable(
+    tiledb_ctx_t* ctx,
+    tiledb_query_t* query,
+    const char* name,
+    void* buffer,
+    uint64_t* buffer_size,
+    tiledb_validity_vec_t* validity_vec) {
+  // Sanity check
+  if (sanity_check(ctx) == TILEDB_ERR ||
+      sanity_check(ctx, query) == TILEDB_ERR ||
+      sanity_check(ctx, validity_vec) == TILEDB_ERR)
+    return TILEDB_ERR;
+
+  // Set attribute buffer
+  if (SAVE_ERROR_CATCH(
+          ctx,
+          query->query_->set_buffer(
+              name, buffer, buffer_size, validity_vec->validity_vec_)))
+    return TILEDB_ERR;
+
+  return TILEDB_OK;
+}
+
+int32_t tiledb_query_set_buffer_var_nullable(
+    tiledb_ctx_t* ctx,
+    tiledb_query_t* query,
+    const char* name,
+    uint64_t* buffer_off,
+    uint64_t* buffer_off_size,
+    void* buffer_val,
+    uint64_t* buffer_val_size,
+    tiledb_validity_vec_t* validity_vec) {
+  // Sanity check
+  if (sanity_check(ctx) == TILEDB_ERR ||
+      sanity_check(ctx, query) == TILEDB_ERR ||
+      sanity_check(ctx, validity_vec) == TILEDB_ERR)
+    return TILEDB_ERR;
+
+  // On writes, check the provided offsets for validity.
+  if (query->query_->type() == tiledb::sm::QueryType::WRITE &&
+      save_error(
+          ctx,
+          tiledb::sm::Query::check_var_attr_offsets(
+              buffer_off, buffer_off_size, buffer_val_size)))
+    return TILEDB_ERR;
+
+  // Set attribute buffers
+  if (SAVE_ERROR_CATCH(
+          ctx,
+          query->query_->set_buffer(
+              name,
+              buffer_off,
+              buffer_off_size,
+              buffer_val,
+              buffer_val_size,
+              validity_vec->validity_vec_)))
+    return TILEDB_ERR;
+
+  return TILEDB_OK;
+}
+
 int32_t tiledb_query_get_buffer(
     tiledb_ctx_t* ctx,
     tiledb_query_t* query,
@@ -2974,6 +3059,157 @@ int32_t tiledb_query_get_fragment_timestamp_range(
           query->query_->get_written_fragment_timestamp_range(idx, t1, t2)))
     return TILEDB_ERR;
 
+  return TILEDB_OK;
+}
+
+/* ********************************* */
+/*          VALIDITY VECTOR          */
+/* ********************************* */
+
+int32_t tiledb_validity_vec_alloc(
+    tiledb_ctx_t* ctx, uint64_t size, tiledb_validity_vec_t** validity_vec) {
+  if (sanity_check(ctx) == TILEDB_ERR)
+    return TILEDB_ERR;
+
+  // Create a validity vector struct
+  *validity_vec = new (std::nothrow) tiledb_validity_vec_t;
+  if (*validity_vec == nullptr) {
+    auto st = tiledb::sm::Status::Error(
+        "Failed to allocate TileDB validity vector object");
+    LOG_STATUS(st);
+    save_error(ctx, st);
+    return TILEDB_OOM;
+  }
+
+  // Allocate a validity vector object
+  (*validity_vec)->validity_vec_ =
+      new (std::nothrow) tiledb::sm::ValidityVector(size);
+  if ((*validity_vec)->validity_vec_ == nullptr) {
+    delete *validity_vec;
+    *validity_vec = nullptr;
+    tiledb::sm::Status st = tiledb::sm::Status::Error(
+        "Failed to create TileDB ValidityVector object; Memory allocation "
+        "error");
+    LOG_STATUS(st);
+    save_error(ctx, st);
+    return TILEDB_OOM;
+  }
+
+  // Success
+  return TILEDB_OK;
+}
+
+#if 0
+int32_t tiledb_validity_vec_alloc(
+    tiledb_ctx_t* ctx,
+    uint64_t num_values,
+    uint8_t fill_value,
+    tiledb_validity_vec_t** validity_vec) {
+  if (sanity_check(ctx) == TILEDB_ERR)
+    return TILEDB_ERR;
+
+  // Create a validity vector struct
+  *validity_vec = new (std::nothrow) tiledb_validity_vec_t;
+  if (*validity_vec == nullptr) {
+    auto st =
+        tiledb::sm::Status::Error("Failed to allocate TileDB validity vector object");
+    LOG_STATUS(st);
+    save_error(ctx, st);
+    return TILEDB_OOM;
+  }
+
+  // Allocate a validity vector object
+  (*validity_vec)->validity_vec_ =
+      new (std::nothrow) tiledb::sm::ValidityVector(std::vector<bool>(num_values, fill_value));
+  if ((*validity_vec)->validity_vec_ == nullptr) {
+    delete *validity_vec;
+    *validity_vec = nullptr;
+    tiledb::sm::Status st = tiledb::sm::Status::Error(
+        "Failed to create TileDB ValidityVector object; Memory allocation "
+        "error");
+    LOG_STATUS(st);
+    save_error(ctx, st);
+    return TILEDB_OOM;
+  }
+
+  // Success
+  return TILEDB_OK;
+}
+#endif
+
+void tiledb_validity_vec_free(tiledb_validity_vec_t** validity_vec) {
+  if (validity_vec != nullptr && *validity_vec != nullptr) {
+    delete (*validity_vec)->validity_vec_;
+    delete (*validity_vec);
+    *validity_vec = nullptr;
+  }
+}
+
+int32_t tiledb_validity_vec_set(
+    tiledb_ctx_t* ctx, tiledb_validity_vec_t* validity_vec, uint8_t* values) {
+  if (sanity_check(ctx) == TILEDB_ERR ||
+      sanity_check(ctx, validity_vec) == TILEDB_ERR)
+    return TILEDB_ERR;
+
+  if (values == nullptr) {
+    auto st = tiledb::sm::Status::Error(
+        "Failed to set ValidityVector object; values are null");
+    LOG_STATUS(st);
+    save_error(ctx, st);
+    return TILEDB_ERR;
+  }
+
+  if (SAVE_ERROR_CATCH(ctx, validity_vec->validity_vec_->set_bytemap(values)))
+    return TILEDB_ERR;
+
+  // Success
+  return TILEDB_OK;
+}
+
+int32_t tiledb_validity_vec_values(
+    tiledb_ctx_t* ctx,
+    tiledb_validity_vec_t* validity_vec,
+    uint8_t* values,
+    uint64_t* size) {
+  if (sanity_check(ctx) == TILEDB_ERR ||
+      sanity_check(ctx, validity_vec) == TILEDB_ERR)
+    return TILEDB_ERR;
+
+  if (values == nullptr) {
+    auto st = tiledb::sm::Status::Error(
+        "Failed to get validity vector size; values are null");
+    LOG_STATUS(st);
+    save_error(ctx, st);
+    return TILEDB_ERR;
+  }
+
+  if (SAVE_ERROR_CATCH(ctx, validity_vec->validity_vec_->get_bytemap(values)))
+    return TILEDB_ERR;
+
+  if (size != nullptr)
+    *size = validity_vec->validity_vec_->size();
+
+  // Success
+  return TILEDB_OK;
+}
+
+int32_t tiledb_validity_vec_size(
+    tiledb_ctx_t* ctx, tiledb_validity_vec_t* validity_vec, uint64_t* size) {
+  if (sanity_check(ctx) == TILEDB_ERR ||
+      sanity_check(ctx, validity_vec) == TILEDB_ERR)
+    return TILEDB_ERR;
+
+  if (size == nullptr) {
+    auto st = tiledb::sm::Status::Error(
+        "Failed to get validity vector size; size is null");
+    LOG_STATUS(st);
+    save_error(ctx, st);
+    return TILEDB_ERR;
+  }
+
+  *size = validity_vec->validity_vec_->size();
+
+  // Success
   return TILEDB_OK;
 }
 

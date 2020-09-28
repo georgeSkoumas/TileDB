@@ -1543,8 +1543,9 @@ Status Subarray::compute_tile_coords_row() {
       auto r = (const T*)ranges_[d][j].data();
       tile_start = (r[0] - dim_dom[0]) / tile_extent;
       tile_end = (r[1] - dim_dom[0]) / tile_extent;
-      for (uint64_t t = tile_start; t <= tile_end; ++t)
+      for (uint64_t t = tile_start; t <= tile_end; ++t) {
         coords_set[d].insert(t);
+      }
     }
   }
 

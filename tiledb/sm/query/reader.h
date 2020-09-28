@@ -47,6 +47,7 @@
 #include "tiledb/sm/query/result_cell_slab.h"
 #include "tiledb/sm/query/result_coords.h"
 #include "tiledb/sm/query/result_space_tile.h"
+#include "tiledb/sm/query/validity_vector.h"
 #include "tiledb/sm/query/write_cell_slab_iter.h"
 #include "tiledb/sm/subarray/subarray_partitioner.h"
 
@@ -250,6 +251,48 @@ class Reader {
       void** buffer_val,
       uint64_t** buffer_val_size) const;
 
+  /**
+   * Retrieves the buffer of a fixed-sized, nullable attribute.
+   *
+   * @param name The attribute name.
+   * @param buffer The buffer to be retrieved.
+   * @param buffer_size A pointer to the buffer size to be retrieved.
+   * @param buffer_validity The validity buffer to be retrieved.
+   * @param buffer_validity_size A pointer to the validity buffer size to be
+   * retrieved.
+   * @return Status
+   */
+  Status get_buffer_nullable(
+      const std::string& name,
+      void** buffer,
+      uint64_t** buffer_size,
+      void** buffer_validity,
+      uint64_t** buffer_validity_size) const;
+
+  /**
+   * Retrieves the offsets, values, and validity buffers of a var-sized,
+   * nullable attribute.
+   *
+   * @param name The attribute/dimension name.
+   * @param buffer_off The offsets buffer to be retrieved.
+   * @param buffer_off_size A pointer to the offsets buffer size to be
+   *     retrieved.
+   * @param buffer_val The values buffer to be retrieved.
+   * @param buffer_val_size A pointer to the values buffer size to be retrieved.
+   * @param buffer_validity The validity buffer to be retrieved.
+   * @param buffer_validity_size A pointer to the validity buffer size to be
+   * retrieved.
+   * @return Status
+   */
+  Status get_buffer_nullable(
+      const std::string& name,
+      uint64_t** buffer_off,
+      uint64_t** buffer_off_size,
+      void** buffer_val,
+      uint64_t** buffer_val_size,
+      void** buffer_validity,
+      uint64_t** buffer_validity_size) const;
+
   /** Returns the first fragment uri. */
   URI first_fragment_uri() const;
 
@@ -326,6 +369,57 @@ class Reader {
       uint64_t* buffer_off_size,
       void* buffer_val,
       uint64_t* buffer_val_size,
+      bool check_null_buffers = true);
+
+  /**
+   * Sets the buffer for a fixed-sized, nullable attribute.
+   *
+   * @param name The attribute to set the buffer for.
+   * @param buffer The buffer that will hold the data to be read.
+   * @param buffer_size This initially contains the allocated
+   *     size of `buffer`, but after the termination of the function
+   *     it will contain the size of the useful (read) data in `buffer`.
+   * @param check_null_buffers If true (default), null buffers are not allowed.
+   * @param validity_vector The validity vector associated with values in
+   * `buffer`.
+   * @return Status
+   */
+  Status set_buffer(
+      const std::string& name,
+      void* buffer,
+      uint64_t* buffer_size,
+      ValidityVector* validity_vector,
+      bool check_null_buffers = true);
+
+  /**
+   * Sets the buffer for a var-sized, nullable attribute.
+   *
+   * @param name The name to set the buffer for.
+   * @param buffer_off The buffer that will hold the data to be read.
+   *     This buffer holds the starting offsets of each cell value in
+   *     `buffer_val`.
+   * @param buffer_off_size This initially contains
+   *     the allocated size of `buffer_off`, but after the termination of the
+   *     function it will contain the size of the useful (read) data in
+   *     `buffer_off`.
+   * @param buffer_val The buffer that will hold the data to be read.
+   *     This buffer holds the actual var-sized cell values.
+   * @param buffer_val_size This initially contains
+   *     the allocated size of `buffer_val`, but after the termination of the
+   *     function it will contain the size of the useful (read) data in
+   *     `buffer_val`.
+   * @param validity_vector The validity vector associated with values in
+   * `buffer_val`.
+   * @param check_null_buffers If true (default), null buffers are not allowed.
+   * @return Status
+   */
+  Status set_buffer(
+      const std::string& name,
+      uint64_t* buffer_off,
+      uint64_t* buffer_off_size,
+      void* buffer_val,
+      uint64_t* buffer_val_size,
+      ValidityVector* validity_vector,
       bool check_null_buffers = true);
 
   /** Sets the fragment metadata. */
@@ -1090,7 +1184,8 @@ class Reader {
       std::vector<uint64_t>* offset_offsets_per_cs,
       std::vector<uint64_t>* var_offsets_per_cs,
       uint64_t* total_offset_size,
-      uint64_t* total_var_size) const;
+      uint64_t* total_var_size,
+      uint64_t* total_validity_size) const;
 
   /**
    * Copies the cells for the input **var-sized** attribute/dimension and result
@@ -1336,6 +1431,27 @@ class Reader {
       const;
 
   /**
+   * TODO JOE
+   */
+  Status unfilter_tile_nullable(
+      const std::string& name,
+      Tile* tile,
+      Tile* tile_validity,
+      const std::vector<std::pair<uint64_t, uint64_t>>* result_cell_slab_ranges)
+      const;
+
+  /**
+   * TODO JOE
+   */
+  Status unfilter_tile_nullable(
+      const std::string& name,
+      Tile* tile,
+      Tile* tile_var,
+      Tile* tile_validity,
+      const std::vector<std::pair<uint64_t, uint64_t>>* result_cell_slab_ranges)
+      const;
+
+  /**
    * Gets all the result coordinates of the input tile into `result_coords`.
    *
    * @param result_tile The result tile to read the coordinates from.
@@ -1382,6 +1498,38 @@ class Reader {
       const std::string& name,
       Tile* tile,
       Tile* tile_var) const;
+
+  /**
+   * Initializes a fixed-sized tile.
+   *
+   * @param format_version The format version of the tile.
+   * @param name The attribute/dimension the tile belongs to.
+   * @param tile The tile to be initialized.
+   * TODO JOE
+   * @return Status
+   */
+  Status init_tile_nullable(
+      uint32_t format_version,
+      const std::string& name,
+      Tile* tile,
+      Tile* tile_validity) const;
+
+  /**
+   * Initializes a var-sized tile.
+   *
+   * @param format_version The format version of the tile.
+   * @param name The attribute/dimension the tile belongs to.
+   * @param tile The offsets tile to be initialized.
+   * @param tile_var The var-sized data tile to be initialized.
+   * TODO JOE
+   * @return Status
+   */
+  Status init_tile_nullable(
+      uint32_t format_version,
+      const std::string& name,
+      Tile* tile,
+      Tile* tile_var,
+      Tile* tile_validity) const;
 
   /**
    * Loads tile offsets for each attribute/dimension name into

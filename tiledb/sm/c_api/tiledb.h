@@ -518,6 +518,9 @@ typedef struct tiledb_filter_list_t tiledb_filter_list_t;
 typedef struct tiledb_query_t tiledb_query_t;
 
 /** A virtual filesystem object. */
+typedef struct tiledb_validity_vec_t tiledb_validity_vec_t;
+
+/** A virtual filesystem object. */
 typedef struct tiledb_vfs_t tiledb_vfs_t;
 
 /** A virtual filesystem file handle. */
@@ -1872,6 +1875,23 @@ TILEDB_EXPORT int32_t tiledb_attribute_alloc(
  * @param attr The attribute to be destroyed.
  */
 TILEDB_EXPORT void tiledb_attribute_free(tiledb_attribute_t** attr);
+
+/**
+ * Sets the nullability of an attribute.
+ *
+ * **Example:**
+ *
+ * @code{.c}
+ * tiledb_attribute_set_nullable(ctx, attr, 1);
+ * @endcode
+ *
+ * @param ctx The TileDB context.
+ * @param attr The target attribute.
+ * @param nullable Non-zero if the attribute is nullable.
+ * @return `TILEDB_OK` for success and `TILEDB_ERR` for error.
+ */
+TILEDB_EXPORT int32_t tiledb_attribute_set_nullable(
+    tiledb_ctx_t* ctx, tiledb_attribute_t* attr, uint8_t nullable);
 
 /**
  * Sets the filter list for an attribute.
@@ -3231,6 +3251,87 @@ TILEDB_EXPORT int32_t tiledb_query_set_buffer_var(
     uint64_t* buffer_val_size);
 
 /**
+ * Sets the buffer for a fixed-sized attribute/dimension to a query, which will
+ * either hold the values to be written (if it is a write query), or will hold
+ * the results from a read query.
+ *
+ * **Example:**
+ *
+ * @code{.c}
+ * int32_t a1[100];
+ * uint64_t a1_size = sizeof(a1);
+ * tiledb_query_set_buffer(ctx, query, "a1", a1, &a1_size);
+ * @endcode
+ *
+ * @param ctx The TileDB context.
+ * @param query The TileDB query.
+ * @param name The attribute/dimension to set the buffer for. Note that
+ *     zipped coordinates have special name `TILEDB_COORDS`.
+ * @param buffer The buffer that either have the input data to be written,
+ *     or will hold the data to be read.
+ * @param buffer_size In the case of writes, this is the size of `buffer`
+ *     in bytes. In the case of reads, this initially contains the allocated
+ *     size of `buffer`, but after the termination of the query
+ *     it will contain the size of the useful (read) data in `buffer`.
+ * @param validity_vec TODO JOE
+ * @return `TILEDB_OK` for success and `TILEDB_ERR` for error.
+ */
+TILEDB_EXPORT int32_t tiledb_query_set_buffer_nullable(
+    tiledb_ctx_t* ctx,
+    tiledb_query_t* query,
+    const char* name,
+    void* buffer,
+    uint64_t* buffer_size,
+    tiledb_validity_vec_t* validity_vec);
+
+/**
+ * Sets the buffer for a var-sized attribute/dimension to a query, which will
+ * either hold the values to be written (if it is a write query), or will hold
+ * the results from a read query.
+ *
+ * **Example:**
+ *
+ * @code{.c}
+ * uint64_t a2_off[10];
+ * uint64_t a2_off_size = sizeof(a2_off);
+ * char a2_val[100];
+ * uint64_t a2_val_size = sizeof(a2_val);
+ * tiledb_query_set_buffer_var(
+ *     ctx, query, "a2", a2_off, &a2_off_size, a2_val, &a2_val_size);
+ * @endcode
+ *
+ * @param ctx The TileDB context.
+ * @param query The TileDB query.
+ * @param name The attribute/dimension to set the buffer for.
+ * @param buffer_off The buffer that either have the input data to be written,
+ *     or will hold the data to be read. This buffer holds the starting offsets
+ *     of each cell value in `buffer_val`.
+ * @param buffer_off_size In the case of writes, it is the size of `buffer_off`
+ *     in bytes. In the case of reads, this initially contains the allocated
+ *     size of `buffer_off`, but after the *end of the query*
+ *     (`tiledb_query_submit`) it will contain the size of the useful (read)
+ *     data in `buffer_off`.
+ * @param buffer_val The buffer that either have the input data to be written,
+ *     or will hold the data to be read. This buffer holds the actual var-sized
+ *     cell values.
+ * @param buffer_val_size In the case of writes, it is the size of `buffer_val`
+ *     in bytes. In the case of reads, this initially contains the allocated
+ *     size of `buffer_val`, but after the termination of the function
+ *     it will contain the size of the useful (read) data in `buffer_val`.
+ * @param validity_vec TODO JOE
+ * @return `TILEDB_OK` for success and `TILEDB_ERR` for error.
+ */
+TILEDB_EXPORT int32_t tiledb_query_set_buffer_var_nullable(
+    tiledb_ctx_t* ctx,
+    tiledb_query_t* query,
+    const char* name,
+    uint64_t* buffer_off,
+    uint64_t* buffer_off_size,
+    void* buffer_val,
+    uint64_t* buffer_val_size,
+    tiledb_validity_vec_t* validity_vec);
+
+/**
  * Gets the buffer of a fixed-sized attribute from a query. If the
  * buffer has not been set, then `buffer` is set to `nullptr`.
  *
@@ -3827,6 +3928,66 @@ TILEDB_EXPORT int32_t tiledb_query_get_fragment_timestamp_range(
     uint64_t idx,
     uint64_t* t1,
     uint64_t* t2);
+
+/* ********************************* */
+/*          Validity Vector          */
+/* ********************************* */
+
+/**
+ * Creates a TileDB validity vector.
+ *
+ * **Example:**
+ *
+ * @code{.c}
+ * tiledb_validity_vec_t* validity_vec;
+ * tiledb_validity_vec_alloc(ctx, 10, &validity_vec);
+ * @endcode
+ *
+ * @param ctx The TileDB context.
+ * @param uint64_t size The number of validity values.
+ * @param validity_vec The validity vector to be created.
+ * @return `TILEDB_OK` for success and `TILEDB_OOM` or `TILEDB_ERR` for error.
+ */
+TILEDB_EXPORT int32_t tiledb_validity_vec_alloc(
+    tiledb_ctx_t* ctx, uint64_t size, tiledb_validity_vec_t** validity_vec);
+
+/**
+ * Destroys a TileDB validity vector, freeing associated memory.
+ *
+ * **Example:**
+ *
+ * @code{.c}
+ * tiledb_validity_vec_t* validity_vec;
+ * tiledb_validity_vec_alloc(ctx, &validity_vec);
+ * tiledb_validity_vec_free(&validity_vec);
+ * @endcode
+ *
+ * @param validity_vec The validity vector to be destroyed.
+ */
+TILEDB_EXPORT void tiledb_validity_vec_free(
+    tiledb_validity_vec_t** validity_vec);
+
+// TODO note it makes a copy of values
+TILEDB_EXPORT int32_t tiledb_validity_vec_set(
+    tiledb_ctx_t* ctx, tiledb_validity_vec_t* validity_vec, uint8_t* values);
+
+#if 0
+TILEDB_EXPORT int32_t tiledb_validity_vec_resize(
+    tiledb_ctx_t* ctx,
+    tiledb_validity_vec_t* validity_vec,
+    uint64_t size,
+    uint8_t fill_value);
+#endif
+
+// TODO note it makes a copy of values
+TILEDB_EXPORT int32_t tiledb_validity_vec_values(
+    tiledb_ctx_t* ctx,
+    tiledb_validity_vec_t* validity_vec,
+    uint8_t* values,
+    uint64_t* size);
+
+TILEDB_EXPORT int32_t tiledb_validity_vec_size(
+    tiledb_ctx_t* ctx, tiledb_validity_vec_t* validity_vec, uint64_t* size);
 
 /* ********************************* */
 /*               ARRAY               */

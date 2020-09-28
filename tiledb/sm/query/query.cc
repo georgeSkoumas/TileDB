@@ -565,11 +565,7 @@ Writer* Query::writer() {
   return &writer_;
 }
 
-Status Query::set_buffer(
-    const std::string& name,
-    void* buffer,
-    uint64_t* buffer_size,
-    bool check_null_buffers) {
+Status Query::check_set_fixed_buffer(const std::string& name) {
   if (name == constants::coords &&
       !array_->array_schema()->domain()->all_dims_same_type())
     return LOG_STATUS(Status::QueryError(
@@ -582,6 +578,16 @@ Status Query::set_buffer(
         "Cannot set buffer; Setting a buffer for zipped coordinates is not "
         "applicable to domains with variable-sized dimensions"));
 
+  return Status::Ok();
+}
+
+Status Query::set_buffer(
+    const std::string& name,
+    void* const buffer,
+    uint64_t* const buffer_size,
+    const bool check_null_buffers) {
+  RETURN_NOT_OK(check_set_fixed_buffer(name));
+
   if (type_ == QueryType::WRITE)
     return writer_.set_buffer(name, buffer, buffer_size);
   return reader_.set_buffer(name, buffer, buffer_size, check_null_buffers);
@@ -589,11 +595,11 @@ Status Query::set_buffer(
 
 Status Query::set_buffer(
     const std::string& name,
-    uint64_t* buffer_off,
-    uint64_t* buffer_off_size,
-    void* buffer_val,
-    uint64_t* buffer_val_size,
-    bool check_null_buffers) {
+    uint64_t* const buffer_off,
+    uint64_t* const buffer_off_size,
+    void* const buffer_val,
+    uint64_t* const buffer_val_size,
+    const bool check_null_buffers) {
   if (type_ == QueryType::WRITE)
     return writer_.set_buffer(
         name, buffer_off, buffer_off_size, buffer_val, buffer_val_size);
@@ -603,6 +609,46 @@ Status Query::set_buffer(
       buffer_off_size,
       buffer_val,
       buffer_val_size,
+      check_null_buffers);
+}
+
+Status Query::set_buffer(
+    const std::string& name,
+    void* const buffer,
+    uint64_t* const buffer_size,
+    ValidityVector* const validity_vector,
+    const bool check_null_buffers) {
+  RETURN_NOT_OK(check_set_fixed_buffer(name));
+
+  if (type_ == QueryType::WRITE)
+    return writer_.set_buffer(name, buffer, buffer_size, validity_vector);
+  return reader_.set_buffer(
+      name, buffer, buffer_size, validity_vector, check_null_buffers);
+}
+
+Status Query::set_buffer(
+    const std::string& name,
+    uint64_t* const buffer_off,
+    uint64_t* const buffer_off_size,
+    void* const buffer_val,
+    uint64_t* const buffer_val_size,
+    ValidityVector* const validity_vector,
+    const bool check_null_buffers) {
+  if (type_ == QueryType::WRITE)
+    return writer_.set_buffer(
+        name,
+        buffer_off,
+        buffer_off_size,
+        buffer_val,
+        buffer_val_size,
+        validity_vector);
+  return reader_.set_buffer(
+      name,
+      buffer_off,
+      buffer_off_size,
+      buffer_val,
+      buffer_val_size,
+      validity_vector,
       check_null_buffers);
 }
 

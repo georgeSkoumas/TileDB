@@ -325,6 +325,14 @@ bool ArraySchema::is_dim(const std::string& name) const {
   return this->dimension(name) != nullptr;
 }
 
+bool ArraySchema::is_nullable(const std::string& name) const {
+  // TODO JOE should this return a non-OK status if attr doesn't exist?
+  const Attribute* const attr = this->attribute(name);
+  if (attr == nullptr)
+    return false;
+  return attr->nullable();
+}
+
 // ===== FORMAT =====
 // version (uint32_t)
 // allow_dups (bool)
@@ -340,6 +348,8 @@ bool ArraySchema::is_dim(const std::string& name) const {
 //   attribute #2
 //   ...
 Status ArraySchema::serialize(Buffer* buff) const {
+  // TODO JOE
+
   // Write version
   RETURN_NOT_OK(buff->write(&version_, sizeof(uint32_t)));
 
@@ -439,6 +449,8 @@ Status ArraySchema::add_attribute(const Attribute* attr, bool check_special) {
 }
 
 Status ArraySchema::deserialize(ConstBuffer* buff) {
+  // TODO JOE
+
   // Load version
   RETURN_NOT_OK(buff->read(&version_, sizeof(uint32_t)));
 

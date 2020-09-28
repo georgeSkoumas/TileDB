@@ -61,10 +61,8 @@ const std::string Config::SM_MEMORY_BUDGET = "5368709120";       // 5GB
 const std::string Config::SM_MEMORY_BUDGET_VAR = "10737418240";  // 10GB;
 const std::string Config::SM_SUB_PARTITIONER_MEMORY_BUDGET = "0";
 const std::string Config::SM_ENABLE_SIGNAL_HANDLERS = "true";
-const std::string Config::SM_COMPUTE_CONCURRENCY_LEVEL =
-    utils::parse::to_str(std::thread::hardware_concurrency());
-const std::string Config::SM_IO_CONCURRENCY_LEVEL =
-    utils::parse::to_str(std::thread::hardware_concurrency());
+const std::string Config::SM_COMPUTE_CONCURRENCY_LEVEL = "1";
+const std::string Config::SM_IO_CONCURRENCY_LEVEL = "1";
 #ifdef HAVE_TBB
 const std::string Config::SM_NUM_TBB_THREADS =
     utils::parse::to_str((int)tbb::task_scheduler_init::automatic);

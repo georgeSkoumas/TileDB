@@ -51,13 +51,16 @@ namespace sm {
 /* ********************************* */
 
 Attribute::Attribute()
-    : Attribute("", Datatype::CHAR) {
+    : Attribute("", Datatype::CHAR, false) {
 }
 
-Attribute::Attribute(const std::string& name, Datatype type) {
+Attribute::Attribute(
+    const std::string& name, const Datatype type, const bool nullable) {
   name_ = name;
   type_ = type;
+  nullable_ = nullable;
   cell_val_num_ = (type == Datatype::ANY) ? constants::var_num : 1;
+  nullable_ = false;
   set_default_fill_value();
 }
 
@@ -66,6 +69,7 @@ Attribute::Attribute(const Attribute* attr) {
   name_ = attr->name();
   type_ = attr->type();
   cell_val_num_ = attr->cell_val_num();
+  nullable_ = attr->nullable();
   filters_ = attr->filters_;
   fill_value_ = attr->fill_value_;
 }
@@ -117,6 +121,10 @@ Status Attribute::deserialize(ConstBuffer* buff, uint32_t version) {
     set_default_fill_value();
   }
 
+  // Load nullable flag
+  if (version >= 7)
+    RETURN_NOT_OK(buff->read(&nullable_, sizeof(bool)));
+
   return Status::Ok();
 }
 
@@ -127,6 +135,7 @@ void Attribute::dump(FILE* out) const {
   fprintf(out, "### Attribute ###\n");
   fprintf(out, "- Name: %s\n", name_.c_str());
   fprintf(out, "- Type: %s\n", datatype_str(type_).c_str());
+  fprintf(out, "- Nullable: %s\n", (nullable_ ? "true" : "false"));
   if (!var_size())
     fprintf(out, "- Cell val num: %u\n", cell_val_num_);
   else
@@ -174,6 +183,9 @@ Status Attribute::serialize(Buffer* buff) {
   RETURN_NOT_OK(buff->write(&fill_value_size, sizeof(uint64_t)));
   RETURN_NOT_OK(buff->write(&fill_value_[0], fill_value_.size()));
 
+  // Write nullable
+  RETURN_NOT_OK(buff->write(&nullable_, sizeof(bool)));
+
   return Status::Ok();
 }
 
@@ -186,6 +198,11 @@ Status Attribute::set_cell_val_num(unsigned int cell_val_num) {
   cell_val_num_ = cell_val_num;
   set_default_fill_value();
 
+  return Status::Ok();
+}
+
+Status Attribute::set_nullable(const bool nullable) {
+  nullable_ = nullable;
   return Status::Ok();
 }
 
@@ -258,6 +275,10 @@ Datatype Attribute::type() const {
 
 bool Attribute::var_size() const {
   return cell_val_num_ == constants::var_num;
+}
+
+bool Attribute::nullable() const {
+  return nullable_;
 }
 
 /* ********************************* */

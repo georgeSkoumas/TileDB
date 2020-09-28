@@ -188,6 +188,9 @@ class ArraySchema {
   /** Returns true if the input name is a dimension. */
   bool is_dim(const std::string& name) const;
 
+  /** Returns true if the input name is nullable. */
+  bool is_nullable(const std::string& name) const;
+
   /**
    * Serializes the array schema object into a buffer.
    *

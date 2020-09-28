@@ -45,6 +45,7 @@
 #include "tiledb/sm/misc/status.h"
 #include "tiledb/sm/misc/utils.h"
 #include "tiledb/sm/query/reader.h"
+#include "tiledb/sm/query/validity_vector.h"
 #include "tiledb/sm/query/writer.h"
 
 namespace tiledb {
@@ -391,6 +392,62 @@ class Query {
       bool check_null_buffers = true);
 
   /**
+   * Sets the buffer for a fixed-sized, nullable attribute.
+   *
+   * @param name The attribute to set the buffer for.
+   * @param buffer The buffer that either have the input data to be written,
+   *     or will hold the data to be read.
+   * @param buffer_size In the case of writes, this is the size of `buffer`
+   *     in bytes. In the case of reads, this initially contains the allocated
+   *     size of `buffer`, but after the termination of the query
+   *     it will contain the size of the useful (read) data in `buffer`.
+   * @param validity_vector The validity vector that will either have the
+   * nullable bitmap to be written, or will hold the map to be read.
+   * @param check_null_buffers If true (default), null buffers are not allowed.
+   * @return Status
+   */
+  Status set_buffer(
+      const std::string& name,
+      void* buffer,
+      uint64_t* buffer_size,
+      ValidityVector* validity_vector,
+      bool check_null_buffers = true);
+
+  /**
+   * Sets the buffer for a var-sized, nullable attribute.
+   *
+   * @param name The attribute to set the buffer for.
+   * @param buffer_off The buffer that either have the input data to be written,
+   *     or will hold the data to be read. This buffer holds the starting
+   *     offsets of each cell value in `buffer_val`.
+   * @param buffer_off_size In the case of writes, it is the size of
+   *     `buffer_off` in bytes. In the case of reads, this initially contains
+   *     the allocated size of `buffer_off`, but after the termination of the
+   *     function it will contain the size of the useful (read) data in
+   *     `buffer_off`.
+   * @param buffer_val The buffer that either have the input data to be written,
+   *     or will hold the data to be read. This buffer holds the actual
+   *     var-sized cell values.
+   * @param buffer_val_size In the case of writes, it is the size of
+   *     `buffer_val` in bytes. In the case of reads, this initially contains
+   *     the allocated size of `buffer_val`, but after the termination of the
+   *     query it will contain the size of the useful (read) data in
+   *     `buffer_val`.
+   * @param validity_vector The validity vector that will either have the
+   * nullable bitmap to be written, or will hold the map to be read.
+   * @param check_null_buffers If true (default), null buffers are not allowed.
+   * @return Status
+   */
+  Status set_buffer(
+      const std::string& name,
+      uint64_t* buffer_off,
+      uint64_t* buffer_off_size,
+      void* buffer_val,
+      uint64_t* buffer_val_size,
+      ValidityVector* validity_vector,
+      bool check_null_buffers = true);
+
+  /**
    * Used by serialization to set the estimated result size
    *
    * @param est_result_size map to set
@@ -499,6 +556,8 @@ class Query {
   /* ********************************* */
   /*           PRIVATE METHODS         */
   /* ********************************* */
+
+  Status check_set_fixed_buffer(const std::string& name);
 };
 
 }  // namespace sm
