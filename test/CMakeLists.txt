@@ -134,6 +134,7 @@ set(TILEDB_TEST_SOURCES
   src/unit-filter-buffer.cc
   src/unit-filter-pipeline.cc
   src/unit-gcs.cc
+  src/unit-mem-filesystem.cc
   src/unit-hdfs-filesystem.cc
   src/unit-lru_cache.cc
   src/unit-Reader.cc
